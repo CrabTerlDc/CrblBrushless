@@ -51,8 +51,6 @@ int PinModes[20]={0};
 
 #define KFACT 1000 // precision to compute intervals to express valuse 0..1 in integer world
 
-// just to identify on command line
-#define MACHINE_NAME "CRBL_AXEX"
 
 // WITH_WS2812 activate RGB leds on the given line
 #define WITH_WS2812 D3
@@ -63,16 +61,17 @@ int PinModes[20]={0};
 // k respond to X Y Z like Ak Ak+1 Ak+2
 
 // AxeX
-#define AXE_MINE 0
-#define WITH_BRLESS {  D1, -1, D2, -1, D6, -1} // A+ A- B+ B- C+ C- esp8266
+//#define MACHINE_NAME "CRBL_AXEX"  // just to identify on command line
+//#define AXE_MINE 0
+//#define WITH_BRLESS {  D1, -1, D2, -1, D6, -1} // A+ A- B+ B- C+ C- esp8266
 //if needed define WITH_BRLESS_DIR // mode direction // A ADir instead of A+ A-
 
-//#define MACHINE_TYPE "CRBL_AXEY"
+#define MACHINE_TYPE "CRBL_AXEY"
 #define AXE_MINE 1
-//#define WITH_STEPPER { D2, D1} // DIR PULSE
+#define WITH_STEPPER { D2, D1} // DIR PULSE
 
 //#define MACHINE_TYPE "CRBL_AXEZ"
-#define AXE_MINE 2
+//#define AXE_MINE 2
 //#define WITH_STEPPER { D2, D1} // DIR PULSE
 
 // 50.0 too low
@@ -90,10 +89,13 @@ int PinModes[20]={0};
 #endif /*WITH_ESPNOW */
 int GcodeMotorId = 1; // X
 
+// -- variables declaration
+
 uint32_t LastDispMs = 0;
 uint32_t DbgLastActivityMillis = 0;
 
-// -- variables declaration
+uint32_t StatusSanity = 500; // 0..1000
+uint32_t StatusBlinks = 0; // 0..1000
 
 // 0 - rien du tout sauf hello pwr on and GCode
 // 1 - boot et infos systeme
@@ -449,7 +451,7 @@ void ws2812_setup()
 
 void ws2812_loop()
 {
-  if (DiffTime( ws2812_LastDispMs, millis()) > 4000) {
+  if (DiffTime( ws2812_LastDispMs, millis()) > 100) {
 
     // NeopixelPrepare( 0, 1, PIX_MAX, PIX_MAX, PIX_MAX);
 
@@ -525,7 +527,8 @@ int BrushlessSetup() {
 
     // 15us for typical mofset
     //pMotor->MinCommandUs = 500;
-    pMotor->MinCommandUs = 1500;
+    //pMotor->MinCommandUs = 1500;
+    pMotor->MinCommandUs = 150;
 
     if (MOTOR_UNDEF == pMotor->DriverMode) {
       pMotor->DriverMode = MOTOR_BRLESS;
@@ -958,13 +961,13 @@ int MotorLimit( int MotNum, int DMin, int DMax) {
 }
 
 void MotorLoop( int FromInterrupt) {
-  int32_t k; // 0..KFACT
+  int32_t k=0; // 0..KFACT
   uint32_t CurrPos;
   uint32_t ExpectedPos;
   uint32_t CurTime;
   uint32_t NextTime;
   uint32_t CurMicros;
-  int Idx;
+  int Idx = 0;
   Motor_t* pMotor;
 #define KFACT 1000
 
@@ -1020,7 +1023,7 @@ void MotorLoop( int FromInterrupt) {
       pMotor->P1 = CurrPos;
       //dbgprintf( 2, " trorder P1 CP %u %u\n", pMotor->P1, CurrPos);
       pMotor->T1ms = CurTime;
-      k = 50;
+      k = 50; // just limit to 50 tries, 1 should suffice
       while( (k > 0) && (pMotor->Order > 0)) { // some friend might flow with orders
         pMotor->Order = 0;
         k--;
@@ -1033,12 +1036,10 @@ void MotorLoop( int FromInterrupt) {
 
     // compute expected pos
     if ( CurTime > pMotor->T2ms) {
-      //k = KFACT;
-      k = KFACT + 1;
+      k = KFACT;
       ExpectedPos = pMotor->P2;
     } else if (CurTime < pMotor->T1ms) {
-      //k = 0;
-      k = -1;
+      k = 0;
       ExpectedPos = pMotor->P1;
     } else {
       int32_t DiffT;
@@ -1060,6 +1061,12 @@ void MotorLoop( int FromInterrupt) {
     }
     // dbgprintf( 2, " k %i", k);
     // RunOtherTasks( 200); // for Dev
+      if (k<0)
+        StatusBlinks = 1000;
+      else if (k>KFACT)
+        StatusBlinks = 0;
+      else
+        StatusBlinks = (KFACT-k)*1000/KFACT;
 
     // TODO_LATER : timed component and immediate component does not mix as expected, some work to do around
     if (0 == Idx) {
@@ -1381,8 +1388,8 @@ void GcodeG( unsigned char* szCommand) {
     pr_int32_write( pMotor->WishP2, GcodeVal[GcodeMotorId]);
     if (-1 == pMotor->Order) // TODO_LATER at boot it is -1 to relink the position on hot restart if no homing availlable
       pMotor->Order = 0;    
-    pMotor->Order++;
     dbgprintf( 0, "# let's %i G to %i\n", 0, GcodeVal[Gcode_VALX]);
+    pMotor->Order++;
   }
   // TODO_HERE timing to be more Gcode compliant
   dbgprintf( 0, "OK\n");
@@ -1398,9 +1405,9 @@ void CmdLineProcess( unsigned char* szCommandLine) {
       break;
     case 'M': // 115?
       if (AXE_MINE < 3)
-        dbgprintf( 1, "ok MACHINE:%s:%c:A%i\n", MACHINE_NAME, 'X'+AXE_MINE, AXE_MINE);
+        dbgprintf( 1, "ok MACHINE:%s:%c:A%i\n", MACHINE_TYPE, 'X'+AXE_MINE, AXE_MINE);
       else
-        dbgprintf( 1, "ok MACHINE:%s:A%i\n", MACHINE_NAME, AXE_MINE);
+        dbgprintf( 1, "ok MACHINE:%s:A%i\n", MACHINE_TYPE, AXE_MINE);
     break;
   }
 }
@@ -1464,6 +1471,7 @@ void setup() {
 #endif /* WITH_WS2812 */
 
   dbgprintf( 0, "#Setup ends\n");
+  StatusSanity = 1000;
 }
 
 void loop() {
@@ -1473,7 +1481,11 @@ void loop() {
   if (DiffTime( LastDispMs, millis()) > 4000) {
     int Idx;
         
-    dbgprintf( 0, "#EspUsb=A%i", AXE_MINE);
+    #ifdef MACHINE_TYPE
+      dbgprintf( 0, "#EspUsb=%s", MACHINE_TYPE);
+    #else
+      dbgprintf( 0, "#EspUsb=A%i", AXE_MINE);
+    #endif
     dbgprintf( 0, ",Loop=%i", LoopCnt);
     for( Idx = 0; Idx < MOTOR_NB; Idx++){
       Motor_t* pMotor;
@@ -1492,8 +1504,21 @@ void loop() {
   #endif /* WITH_MOTOR */
 
 
+  {
+    static uint32_t ws2812_LastDoMs = 0;
+    if (DiffTime( ws2812_LastDoMs, millis()) > 100) {
+      if (StatusSanity>0) {
+        if (StatusSanity <= 10)
+          StatusSanity = 10;
+        else
+          StatusSanity = StatusSanity*2/3;
+      }
+      ws2812_LastDoMs = millis();
+    }
+  }
+
 #ifdef WITH_WS2812
-  NeopixelPrepare( 0, 0, PIX_MAX, 0, 0);
+  NeopixelPrepare( 0, 0, 0, StatusSanity*PIX_MAX/1000, StatusBlinks*PIX_MAX/1000);
   ws2812_loop();
 #endif /* WITH_WS2812 */
 
