@@ -1,13 +1,14 @@
 
-#define HARDWARE_NAME "CRBL_20250823"
+#define HARDWARE_NAME "CRBL_20250910"
 // Hardware ESP8266 Weemos D1
 // Arduino ide 1.8.15
 // File/Preferences/Additionnal boards URLs + http://arduino.esp8266.com/stable/package_esp8266com_index.json
 // CardType:NodeMCU 0.9 (ESP12) UpSpeed:115k CpuFreq:80Mhz FlashSz:4Mb 
 
 // Arduino IDE 2.3.6
-// File/Preferences/Additionnal boards URLs + ,https://dl.espressif.com/dl/package_esp32_index.json
+// File/Preferences/Additionnal boards URLs + (,)https://dl.espressif.com/dl/package_esp32_index.json
 // ESP32
+// for FOC V1.0 prefer board "ESP Dev Module"
 
 // TODO a led ws2812 blink on command received
 // TODO a color faint on command processed 
@@ -20,7 +21,7 @@ typedef int32_t pr_int32_t[3];
  //#define WITH_ESPNOW // TODO_LATER
  //#define WITH_ESPNOW_MASTER
 #elif defined( ESP32)
- // mapping is ... for FOC
+ // mapping is ... for FOC 32,33,25,2(en) 26,27,14,12(en)
  // ESP32 Dev Module
   #define D1 32
   #define D2 33
@@ -53,7 +54,7 @@ int PinModes[20]={0};
 
 
 // WITH_WS2812 activate RGB leds on the given line
-#define WITH_WS2812 D3
+//#define WITH_WS2812 D3
 
 // AXE_MINE : Axe followed
 // 0 respond to X Y Z like M0 M1 M2
@@ -61,14 +62,15 @@ int PinModes[20]={0};
 // k respond to X Y Z like Ak Ak+1 Ak+2
 
 // AxeX
-//#define MACHINE_NAME "CRBL_AXEX"  // just to identify on command line
-//#define AXE_MINE 0
-//#define WITH_BRLESS {  D1, -1, D2, -1, D6, -1} // A+ A- B+ B- C+ C- esp8266
+#define MACHINE_TYPE "CRBL_AXEX"  // just to identify on command line
+#define AXE_MINE 0
+#define WITH_BRLESS {  D1, -1, D2, -1, D6, -1} // A+ A- B+ B- C+ C- esp8266
 //if needed define WITH_BRLESS_DIR // mode direction // A ADir instead of A+ A-
 
-#define MACHINE_TYPE "CRBL_AXEY"
-#define AXE_MINE 1
-#define WITH_STEPPER { D2, D1} // DIR PULSE
+// AxeY
+//#define MACHINE_TYPE "CRBL_AXEY"
+//#define AXE_MINE 1
+//#define WITH_STEPPER { D2, D1} // DIR PULSE
 
 //#define MACHINE_TYPE "CRBL_AXEZ"
 //#define AXE_MINE 2
@@ -210,8 +212,8 @@ void EspNowLoop()
 
 #ifdef WITH_BRLESS
   // brushless (3 coils) motor
-  uint8_t BrushlessPins[] = WITH_BRLESS;
-  #define BrushlessNb (sizeof( BrushlessPins) / (6*sizeof(uint8_t)))
+  int BrushlessPins[] = WITH_BRLESS;
+  #define BrushlessNb (sizeof( BrushlessPins) / (6*sizeof(int)))
   #define MOTOR_BRLESS_IDX 0
   #ifdef WITH_BRLESS_DIR
     uint8_t BrushlessMode = 1;
@@ -340,14 +342,16 @@ void MyPinmode( int Pin, int Mode) {
   int Freq = 30000;
   int Reso = 8;
 
+
   switch(Pin)
   {
-    case 32: ledcSetup( 0, Freq, Reso);ledcAttachPin( Pin, 0); return;
-    case 33: ledcSetup( 1, Freq, Reso);ledcAttachPin( Pin, 1); return;
-    case 25: ledcSetup( 2, Freq, Reso);ledcAttachPin( Pin, 2); return;
-    case 26: ledcSetup( 3, Freq, Reso);ledcAttachPin( Pin, 3); return;
-    case 27: ledcSetup( 4, Freq, Reso);ledcAttachPin( Pin, 4); return;
-    case 14: ledcSetup( 5, Freq, Reso);ledcAttachPin( Pin, 5); return;
+    // some genius decides to change API and broke backward compatibility 2.x to 3.0, possibly in an attempt to crunch existing applications base
+    case 32: ledcAttach( Pin, Freq, Reso); return;
+    case 33: ledcAttach( Pin, Freq, Reso); return;
+    case 25: ledcAttach( Pin, Freq, Reso); return;
+    case 26: ledcAttach( Pin, Freq, Reso); return;
+    case 27: ledcAttach( Pin, Freq, Reso); return;
+    case 14: ledcAttach( Pin, Freq, Reso); return;
   }
 
 #endif /* ESP32 */
