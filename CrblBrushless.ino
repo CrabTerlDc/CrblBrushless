@@ -1,5 +1,5 @@
 
-#define HARDWARE_NAME "CRBL_20250910"
+#define HARDWARE_NAME "CRBL_202509121937"
 // Hardware ESP8266 Weemos D1
 // Arduino ide 1.8.15
 // File/Preferences/Additionnal boards URLs + http://arduino.esp8266.com/stable/package_esp8266com_index.json
@@ -7,7 +7,7 @@
 
 // Arduino IDE 2.3.6
 // File/Preferences/Additionnal boards URLs + (,)https://dl.espressif.com/dl/package_esp32_index.json
-// ESP32
+// ESP32 should one day be replaced by ESP32_FOC_V1
 // for FOC V1.0 prefer board "ESP Dev Module"
 
 // TODO a led ws2812 blink on command received
@@ -21,11 +21,13 @@ typedef int32_t pr_int32_t[3];
  //#define WITH_ESPNOW // TODO_LATER
  //#define WITH_ESPNOW_MASTER
 #elif defined( ESP32)
- // mapping is ... for FOC 32,33,25,2(en) 26,27,14,12(en)
+ // https://github.com/makerbase-motor/MKS-ESP32FOC/tree/MKS-ESP32-FOC-V1.0#
+ // mapping is ... for FOC 32,33,25,22(enable V2) 26,27,14,12(enabe V2)
  // ESP32 Dev Module
-  #define D1 32
-  #define D2 33
-  #define D6 25
+  #define D1 32 // phaseA0
+  #define D2 33 // phaseB0
+  #define D3 19 // SDA_0
+  #define D6 25 // phaseC0
   //#define analogWrite( x, y) ledcWrite( x, y) // TODO_HERE
 #else
   #define ICACHE_RAM_ATTR
@@ -44,7 +46,8 @@ typedef int32_t pr_int32_t[3];
   #define A0 36
 #endif
 
-int PinModes[20]={0};
+#define PIN_NB 50
+int PinModes[PIN_NB]={0};
 
 #define RunOtherTasks( T) delay(T)
 
@@ -54,7 +57,7 @@ int PinModes[20]={0};
 
 
 // WITH_WS2812 activate RGB leds on the given line
-//#define WITH_WS2812 D3
+#define WITH_WS2812 D3
 
 // AXE_MINE : Axe followed
 // 0 respond to X Y Z like M0 M1 M2
@@ -319,7 +322,7 @@ void EspNowLoop()
 void MyAnalogWrite( int Pin, int Duty /* 0 .. 255 */)
 {
 
-  #ifdef ESP32
+  #ifdef ESP32_deprec
   int LocalDuty = Duty; // *255/1000; for 0..1000
   switch(Pin) // for FOC card
   {
@@ -336,26 +339,21 @@ void MyAnalogWrite( int Pin, int Duty /* 0 .. 255 */)
 }
 
 void MyPinmode( int Pin, int Mode) {
-    // dbgprintf( 0, "#%s(%i, )\n", __func__, Pin);
+    dbgprintf( 0, "#%s(%i, %i)\n", __func__, Pin, Mode);
 
 #ifdef ESP32
-  int Freq = 30000;
-  int Reso = 8;
-
-
+  if(OUTPUT == Mode)
   switch(Pin)
   {
-    // some genius decides to change API and broke backward compatibility 2.x to 3.0, possibly in an attempt to crunch existing applications base
-    case 32: ledcAttach( Pin, Freq, Reso); return;
-    case 33: ledcAttach( Pin, Freq, Reso); return;
-    case 25: ledcAttach( Pin, Freq, Reso); return;
-    case 26: ledcAttach( Pin, Freq, Reso); return;
-    case 27: ledcAttach( Pin, Freq, Reso); return;
-    case 14: ledcAttach( Pin, Freq, Reso); return;
+    // git MKS-ESP32FOC\Test Code\5_close_loop_position_example\5_close_loop_position_example.ino they set the phases to INPUT_PULLUP
+    case 32: Mode = INPUT_PULLUP; break;
+    case 33: Mode = INPUT_PULLUP; break;
+    case 25: Mode = INPUT_PULLUP; break;
+    case 26: Mode = INPUT_PULLUP; break;
+    case 27: Mode = INPUT_PULLUP; break;
+    case 14: Mode = INPUT_PULLUP; break;
   }
-
-#endif /* ESP32 */
-#ifdef ESP8266
+#elif defined( ESP8266)
   if ((16 == Pin) && (INPUT_PULLUP == Mode)) {
     // rem : if RESTART_PIN is 16 on ESP8266 a physical pullup (10kOhm?) is required
     // rem : seems no interrupt either
@@ -364,7 +362,7 @@ void MyPinmode( int Pin, int Mode) {
   }
 #endif /* #ifdef ESP8266 */
 
-  if ((Pin >= 0) && (Pin < 20))
+  if ((Pin >= 0) && (Pin < PIN_NB))
   {
     dbgprintf( 0, "# MyPinmode %i - %i\n", Pin, Mode);
     if ((PinModes[Pin] != Mode)) {
@@ -374,6 +372,8 @@ void MyPinmode( int Pin, int Mode) {
       dbgprintf( 1, "# Warn, duplicated init %i\n", Pin);
       pinMode( Pin, Mode);
     }
+  } else {
+    dbgprintf( 1, "# Warn, inapropriate pin number %i\n", Pin);
   }
 }
 
@@ -765,7 +765,21 @@ uint32_t StepperLoop( void* pMotorVoid, uint32_t ExpectedPos) {
 
 void SetFreq( int pin, int divisor) {
 #ifdef ESP32
-// TODO_HERE
+  int Freq = 30000;
+  int Reso = 8;
+
+//if(0) // deactivated due to seems to set to 0, maybe not revealeant or not the way to ... suppress sound only youngs can hear
+  switch(pin)
+  {
+    // some genius decides to change API and broke backward compatibility 2.x to 3.0, possibly in an attempt to crunch existing applications base
+    case 32: ledcAttach( pin, Freq, Reso); return;
+    case 33: ledcAttach( pin, Freq, Reso); return;
+    case 25: ledcAttach( pin, Freq, Reso); return;
+    case 26: ledcAttach( pin, Freq, Reso); return;
+    case 27: ledcAttach( pin, Freq, Reso); return;
+    case 14: ledcAttach( pin, Freq, Reso); return;
+  }
+
 #elif defined( ESP8266)
 // change the frequency for MotorDcPwm, https://github.com/esp8266/Arduino/issues/2592.
   analogWriteFreq( 200);
