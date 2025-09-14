@@ -322,18 +322,10 @@ void EspNowLoop()
 void MyAnalogWrite( int Pin, int Duty /* 0 .. 255 */)
 {
 
-  #ifdef ESP32_deprec
-  int LocalDuty = Duty; // *255/1000; for 0..1000
-  switch(Pin) // for FOC card
-  {
-    case 32: ledcWrite( 0, LocalDuty); return;
-    case 33: ledcWrite( 1, LocalDuty); return;
-    case 25: ledcWrite( 2, LocalDuty); return;
-    case 26: ledcWrite( 3, LocalDuty); return;
-    case 27: ledcWrite( 4, LocalDuty); return;
-    case 14: ledcWrite( 5, LocalDuty); return;
-  }
-  #endif /* ESP32 */
+  if (Duty > 255)
+    Duty = 255;
+  if (Duty < 0)
+    Duty = 0;
 
   analogWrite( Pin, Duty);
 }
@@ -580,8 +572,8 @@ int32_t BrushlessLoop( void* pMotorVoid, int32_t ExpectedPos) {
     Pwr[Idx]= Pwr[Idx] - PwrMin;
     if (Pwr[Idx] < 0)
       Pwr[Idx] = 0;
-    if (Pwr[Idx] >= 254)
-      Pwr[Idx] = 254;
+    if (Pwr[Idx] >= 255)
+      Pwr[Idx] = 255;
   }
   
   // apply powers
@@ -593,20 +585,20 @@ int32_t BrushlessLoop( void* pMotorVoid, int32_t ExpectedPos) {
     //   dbgprintf( 2,",");
     // }
 
-    if(1==BrushlessMode) {
+    if (1==BrushlessMode) {
       // TODO_LATER : pwm brownian, don't write if already done by last
       if(Pwr[Idx] < 0){
-        MyAnalogWrite(BrushlessPins[pMotor->Pin1 + 2*Idx+1], -Pwr[Idx]);
-        digitalWrite(BrushlessPins[pMotor->Pin1 + 2*Idx], 1);
+        MyAnalogWrite( BrushlessPins[pMotor->Pin1 + 2*Idx+1], -Pwr[Idx]);
+        digitalWrite( BrushlessPins[pMotor->Pin1 + 2*Idx], 1);
       } else if(Pwr[Idx] > 0){
-        MyAnalogWrite(BrushlessPins[pMotor->Pin1 + 2*Idx+1], Pwr[Idx]);
-        digitalWrite(BrushlessPins[pMotor->Pin1 + 2*Idx], 1);
+        MyAnalogWrite( BrushlessPins[pMotor->Pin1 + 2*Idx+1], Pwr[Idx]);
+        digitalWrite( BrushlessPins[pMotor->Pin1 + 2*Idx], 1);
       } else {
-        digitalWrite(BrushlessPins[pMotor->Pin1 + 2*Idx], 0);
+        digitalWrite( BrushlessPins[pMotor->Pin1 + 2*Idx], 0);
       }
     } else { // not BrushlessMode
       //dbgprintf( 2," Pwr %i p %i %i ", Pwr[Idx], BrushlessPins[pMotor->Pin1 + 2*Idx]);
-      MyAnalogWrite(BrushlessPins[pMotor->Pin1 + 2*Idx], Pwr[Idx]);
+      MyAnalogWrite( BrushlessPins[pMotor->Pin1 + 2*Idx], Pwr[Idx]);
     } // endif BrushlessMode
     //delay(1); // no use?
     PwrLast[Idx] = Pwr[Idx];
@@ -768,10 +760,11 @@ void SetFreq( int pin, int divisor) {
   int Freq = 30000;
   int Reso = 8;
 
-//if(0) // deactivated due to seems to set to 0, maybe not revealeant or not the way to ... suppress sound only youngs can hear
+  // suppress sound only youngs can hear
   switch(pin)
   {
     // some genius decides to change API and broke backward compatibility 2.x to 3.0, possibly in an attempt to crunch existing applications base
+    // now uses ledcAttach
     case 32: ledcAttach( pin, Freq, Reso); return;
     case 33: ledcAttach( pin, Freq, Reso); return;
     case 25: ledcAttach( pin, Freq, Reso); return;
